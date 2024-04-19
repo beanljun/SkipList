@@ -83,10 +83,7 @@ namespace skip_list
   public:
     SkipList(int);
     ~SkipList();
-    /**
-     * @brief 获取随机层级
-     * 使用C++11的随机数引擎和分布函数，生成1到max_level之间的随机数
-    */
+
     int GetRandomLevel() const;// 获取随机层级
     /** 
      * @brief 创建节点
@@ -196,8 +193,6 @@ namespace skip_list
       }
   }
 
-
-
   template <typename K, typename V>
   int SkipList<K, V>::GetRandomLevel() const
   {
@@ -226,7 +221,7 @@ namespace skip_list
   template <typename K, typename V>
   int SkipList<K, V>::InsertElement(const K key, const V value)
   {
-    std::unique_lock<std::mutex> lck(mutex_); // 加锁
+    std::unique_lock<std::mutex> lck(mutex_);
     auto current = header_; 
     auto update = node::NodeVec<K, V>(max_level_ + 1);// 创建一个用于更新节点的向量，存储每一层小于插入键的最后一个节点
 
@@ -279,9 +274,69 @@ namespace skip_list
       element_count_++; // 跳表的元素数量增1
     }
 
-    lck.unlock(); // 解锁
+    lck.unlock();
     return 0;
   }
+
+  template <typename K, typename V>
+  void SkipList<K, V>::DeleteElement(K key)
+  {
+    std::unique_lock<std::mutex> lck(mutex_); 
+    auto current = header_; 
+    auto update = node::NodeVec<K, V>(max_level_ + 1); 
+    for(int i = current_level_; i >= 0; i--) {
+      while (current -> forward_[i] != nullptr && current -> forward_[i] -> GetKey() < key) {
+        current = current -> forward_[i]; 
+      }
+
+      update[i] = current; 
+    }
+
+    current = current -> forward_[0];
+    if (current != nullptr && current -> GetKey() == key){
+
+      for (int i = 0; i <= current_level_; i++){
+        if (update[i] -> forward_[i] != current)
+          break;
+        update[i] -> forward_[i] = current -> forward_[i];
+      }
+
+      while (current_level_ > 0 && header_ -> forward_[current_level_] == 0){
+        current_level_--;
+      }
+
+      std::cout << "Successfully deleted key " << key << std::endl;
+      element_count_--; 
+    }
+
+    lck.unlock();
+    return;
+  }
+
+
+  template <typename K, typename V>
+  bool SkipList<K, V>::SearchElement(K key) const
+  {
+    std::cout << "search_element-----------------" << std::endl;
+    auto current = header_; 
+
+    for (int i = current_level_; i >= 0; i--){
+      while (current -> forward_[i] != nullptr && current -> forward_[i] -> GetKey() < key){
+        current = current -> forward_[i]; 
+      }
+    }
+
+    current = current -> forward_[0];
+
+    if (current && current -> GetKey() == key){
+      std::cout << "Found key: " << key << ", value: " << current -> GetValue() << std::endl;
+      return true;
+    }
+
+    std::cout << "Not Found Key:" << key << std::endl;
+    return false;
+  }
+
 
 
   template <typename K, typename V>
@@ -305,14 +360,14 @@ namespace skip_list
   void SkipList<K, V>::DumpFile()
   {
     // std::cout << "dump_file-----------------" << std::endl; 
-    file_writer_.open(STORE_FILE); // 打开文件，准备写入
+    file_writer_.open(STORE_FILE); 
 
-    auto node = header_ -> forward_[0];// 从跳表的头节点开始，遍历整个跳表
+    auto node = header_ -> forward_[0];
     while (node != nullptr)
     {
-      file_writer_ << node -> GetKey() << ":" << node -> GetValue() << "\n";// 将每个节点的键和值写入文件
+      file_writer_ << node -> GetKey() << ":" << node -> GetValue() << "\n";
       // std::cout << node -> GetKey() << ":" << node -> GetValue() << ";\n";
-      node = node -> forward_[0];// 移动到下一个节点
+      node = node -> forward_[0];
     }
 
     file_writer_.flush(); // 确保所有数据都已写入文件
@@ -323,7 +378,7 @@ namespace skip_list
   template <typename K, typename V>
   void SkipList<K, V>::LoadFile()
   {
-    file_reader_.open(STORE_FILE); // 打开文件，准备读取
+    file_reader_.open(STORE_FILE); 
     std::cout << "load_file-----------------" << std::endl; // 输出开始加载的消息
 
     std::string str; 
@@ -364,77 +419,5 @@ namespace skip_list
     }
     return true;
   }
-
-
-  template <typename K, typename V>
-  void SkipList<K, V>::DeleteElement(K key)
-  {
-    std::unique_lock<std::mutex> lck(mutex_); // 使用互斥锁，防止多线程同时修改数据
-    auto current = header_; // 设置当前节点为跳表的头节点
-    auto update = node::NodeVec<K, V>(max_level_ + 1); // 创建一个用于更新节点的向量
-    //step 1
-    // 从当前层级开始，向下遍历到第0层
-    for(int i = current_level_; i >= 0; i--) {
-      // 在当前层级中向右移动，直到找到一个键大于或等于目标键的节点，或者到达当前层级的最右端
-
-      while (current -> forward_[i] != nullptr && current -> forward_[i] -> GetKey() < key) {
-        current = current -> forward_[i]; // 将当前节点移动到右边的节点
-      }
-
-      update[i] = current; // 在每个层级中，保存搜索路径上的最后一个节点
-    }
-
-    // 在完成所有层级的搜索后，将当前节点移动到第0层的下一个节点
-    current = current -> forward_[0];
-    // step 2
-    // 如果当前节点的键等于目标键，那么这个节点就是要删除的节点
-    if (current != nullptr && current -> GetKey() == key){
-      // 更新所有包含当前节点的forward指针
-      for (int i = 0; i <= current_level_; i++){
-        if (update[i] -> forward_[i] != current)
-          break;
-        update[i] -> forward_[i] = current -> forward_[i];
-      }
-
-      // 如果删除的是最高层的节点，降低跳表的层级
-      while (current_level_ > 0 && header_ -> forward_[current_level_] == 0){
-        current_level_--;
-      }
-
-      std::cout << "Successfully deleted key " << key << std::endl;
-      element_count_--; 
-    }
-
-    lck.unlock();
-    return;
-  }
-
-
-  template <typename K, typename V>
-  bool SkipList<K, V>::SearchElement(K key) const
-  {
-    std::cout << "search_element-----------------" << std::endl;
-    auto current = header_; // 设置当前节点为跳表的头节点
-
-    // 从当前层级开始，向下遍历到第0层
-    for (int i = current_level_; i >= 0; i--){
-      // 在当前层级中向右移动，直到找到一个键大于或等于目标键的节点，或者到达当前层级的最右端
-      while (current -> forward_[i] != nullptr && current -> forward_[i] -> GetKey() < key){
-        current = current -> forward_[i]; // 将当前节点移动到右边的节点
-      }
-    }
-
-    // 在完成所有层级的搜索后，将当前节点移动到第0层的下一个节点
-    // 如果存在目标键，它必定在第0层中
-    current = current -> forward_[0];
-
-    if (current && current -> GetKey() == key){
-      std::cout << "Found key: " << key << ", value: " << current -> GetValue() << std::endl;
-      return true;
-    }
-
-    std::cout << "Not Found Key:" << key << std::endl;
-    return false;
-  }
-
-}
+  
+} 
